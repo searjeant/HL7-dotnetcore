@@ -19,7 +19,13 @@ namespace HL7.Dotnetcore
         public short SegmentCount { get; set; }
         public HL7Encoding Encoding { get; set; } = new HL7Encoding();
 
-        private const string segmentRegex = "^[A-Z][A-Z][A-Z1-9]$";
+        // segmentRegex modified to accept custom Z-segments (e.g. ZZATTR) 
+        // Original regex was: "^[A-Z][A-Z][A-Z1-9]$";
+        // i don't know why the author anchored the start and end of the group.
+        // Create a single capture group for the segment name.
+        //private val segRegex = """^([A-Z]{2}[A-Z,1-9]+)\|""".toRegex()
+        private const string segmentRegex = "^[A-Z][A-Z][A-Z1-9]+$";
+
         private const string fieldRegex = @"^([0-9]+)([\(\[]([0-9]+)[\)\]]){0,1}$";
         private const string otherRegEx = @"^[1-9]([0-9]{1,2})?$";
 
@@ -57,14 +63,14 @@ namespace HL7.Dotnetcore
         /// Parse the HL7 message in text format, throws HL7Exception if error occurs
         /// </summary>
         /// <returns>boolean</returns>
-        public bool ParseMessage()
+        public bool ParseMessage(bool strict = true)
         {
             bool isValid = false;
             bool isParsed = false;
 
             try
             {
-                isValid = this.validateMessage();
+                isValid = this.validateMessage(strict);
             }
             catch (HL7Exception ex)
             {
@@ -105,7 +111,7 @@ namespace HL7.Dotnetcore
 
                     try
                     {
-                        strSerializedMessage = this.SerializeMessage(false); 
+                        strSerializedMessage = this.SerializeMessage(false);
                     }
                     catch (HL7Exception ex)
                     {
@@ -127,7 +133,7 @@ namespace HL7.Dotnetcore
                     throw new HL7Exception("Failed to parse the message with error - " + ex.Message, HL7Exception.PARSING_ERROR);
                 }
             }
-            
+
             return isParsed;
         }
 
@@ -154,13 +160,13 @@ namespace HL7.Dotnetcore
                         currentSegName = seg.Name;
 
                         strMessage.Append(seg.Name);
-                        
+
                         if (seg.FieldList.Count > 0)
                             strMessage.Append(Encoding.FieldDelimiter);
 
                         int startField = currentSegName == "MSH" ? 1 : 0;
 
-                        for (int i = startField; i<seg.FieldList.Count; i++)
+                        for (int i = startField; i < seg.FieldList.Count; i++)
                         {
                             if (i > startField)
                                 strMessage.Append(Encoding.FieldDelimiter);
@@ -186,7 +192,7 @@ namespace HL7.Dotnetcore
                             else
                                 serializeField(field, strMessage);
                         }
-                        
+
                         strMessage.Append(Encoding.SegmentDelimiter);
                     }
                 }
@@ -194,7 +200,7 @@ namespace HL7.Dotnetcore
                 {
                     if (currentSegName == "MSH")
                         throw new HL7Exception("Failed to serialize the MSH segment with error - " + ex.Message, HL7Exception.SERIALIZATION_ERROR);
-                    else 
+                    else
                         throw;
                 }
 
@@ -204,6 +210,26 @@ namespace HL7.Dotnetcore
             {
                 throw new HL7Exception("Failed to serialize the message with error - " + ex.Message, HL7Exception.SERIALIZATION_ERROR);
             }
+        }
+
+        /// <summary>
+        /// Wraps GetValue to return either the value of the requested field / component, or an empty string
+        /// if the field expression is invalid or the field/component is not present in the message.
+        /// </summary>
+        /// <param name="strValueFormat"></param>
+        /// <returns></returns>
+        public string GetValueOrEmpty(string strValueFormat)
+        {
+            string ret = string.Empty;
+            try
+            {
+                ret = GetValue(strValueFormat);
+            }
+            catch (Exception)
+            {
+                // Eat the exception
+            }
+            return ret;
         }
 
         /// <summary>
@@ -550,7 +576,7 @@ namespace HL7.Dotnetcore
         /// <param name="segmentName">Segment to be removed/param>
         /// <param name="index">Zero-based index of the sement to be removed, in case of multiple. Default is 0.</param>
         /// <returns>True if found and removed sucessfully, otherwise false</returns>
-        public bool RemoveSegment(string segmentName, int index = 0) 
+        public bool RemoveSegment(string segmentName, int index = 0)
         {
             try
             {
@@ -577,7 +603,7 @@ namespace HL7.Dotnetcore
 
         public List<Segment> Segments(string segmentName)
         {
-            return getAllSegmentsInOrder().FindAll(o=> o.Name.Equals(segmentName));
+            return getAllSegmentsInOrder().FindAll(o => o.Name.Equals(segmentName));
         }
 
         public Segment DefaultSegment(string segmentName)
@@ -600,17 +626,17 @@ namespace HL7.Dotnetcore
         public void AddSegmentMSH(string sendingApplication, string sendingFacility, string receivingApplication, string receivingFacility,
             string security, string messageType, string messageControlID, string processingID, string version)
         {
-                var dateString = MessageHelper.LongDateWithFractionOfSecond(DateTime.Now);
-                var delim = this.Encoding.FieldDelimiter;
+            var dateString = MessageHelper.LongDateWithFractionOfSecond(DateTime.Now);
+            var delim = this.Encoding.FieldDelimiter;
 
-                string response = "MSH" + this.Encoding.AllDelimiters + delim + sendingApplication + delim + sendingFacility + delim 
-                    + receivingApplication + delim + receivingFacility + delim
-                    + dateString + delim + (security ?? string.Empty) + delim + messageType + delim + messageControlID + delim 
-                    + processingID + delim + version + this.Encoding.SegmentDelimiter;
+            string response = "MSH" + this.Encoding.AllDelimiters + delim + sendingApplication + delim + sendingFacility + delim
+                + receivingApplication + delim + receivingFacility + delim
+                + dateString + delim + (security ?? string.Empty) + delim + messageType + delim + messageControlID + delim
+                + processingID + delim + version + this.Encoding.SegmentDelimiter;
 
-                var message = new Message(response);
-                message.ParseMessage();
-                this.AddNewSegment(message.DefaultSegment("MSH"));
+            var message = new Message(response);
+            message.ParseMessage();
+            this.AddNewSegment(message.DefaultSegment("MSH"));
         }
 
         /// <summary>
@@ -624,7 +650,7 @@ namespace HL7.Dotnetcore
 
             return MessageHelper.GetMLLP(hl7);
         }
-        
+
         /// <summary>
         /// Builds an ACK or NACK message for this message
         /// </summary>
@@ -641,12 +667,12 @@ namespace HL7.Dotnetcore
                 var dateString = MessageHelper.LongDateWithFractionOfSecond(DateTime.Now);
                 var msh = this.SegmentList["MSH"].First();
                 var delim = this.Encoding.FieldDelimiter;
-                
+
                 response.Append("MSH").Append(this.Encoding.AllDelimiters).Append(delim).Append(msh.FieldList[4].Value).Append(delim).Append(msh.FieldList[5].Value).Append(delim)
                     .Append(msh.FieldList[2].Value).Append(delim).Append(msh.FieldList[3].Value).Append(delim)
                     .Append(dateString).Append(delim).Append(delim).Append("ACK").Append(delim).Append(this.MessageControlID).Append(delim)
                     .Append(this.ProcessingID).Append(delim).Append(this.Version).Append(this.Encoding.SegmentDelimiter);
-                
+
                 response.Append("MSA").Append(delim).Append(code).Append(delim).Append(this.MessageControlID).Append((isNack ? delim + errMsg : string.Empty)).Append(this.Encoding.SegmentDelimiter);
             }
             else
@@ -654,13 +680,13 @@ namespace HL7.Dotnetcore
                 return null;
             }
 
-            try 
+            try
             {
                 var message = new Message(response.ToString());
                 message.ParseMessage();
                 return message;
             }
-            catch 
+            catch
             {
                 return null;
             }
@@ -686,17 +712,17 @@ namespace HL7.Dotnetcore
 
             var field = segment.FieldList[fieldIndex];
 
-            if (field.HasRepetitions)
+            if (field != null && field.HasRepetitions)
                 field = field.RepeatitionList[repetition];
 
             return field;
         }
 
         /// <summary>
-        /// Validates the HL7 message for basic syntax
+        /// Validates the HL7 message for basic syntax 
         /// </summary>
         /// <returns>A boolean indicating whether the whole message is valid or not</returns>
-        private bool validateMessage()
+        private bool validateMessage(bool strict = true)
         {
             try
             {
@@ -711,7 +737,8 @@ namespace HL7.Dotnetcore
                     // Check if message starts with header segment
                     if (!HL7Message.StartsWith("MSH"))
                     {
-                        throw new HL7Exception("MSH segment not found at the beggining of the message", HL7Exception.BAD_MESSAGE);
+                        throw new HL7Exception("MSH segment not found at the beginning of the message",
+                                               HL7Exception.BAD_MESSAGE);
                     }
 
                     this.Encoding.EvaluateSegmentDelimiter(this.HL7Message);
@@ -734,10 +761,11 @@ namespace HL7.Dotnetcore
                             throw new HL7Exception("Invalid segment name found: " + strSegment, HL7Exception.BAD_MESSAGE);
                         }
 
-                        if (strSegment.Length > 3 && fourthCharMSH != strSegment[3])
-                        {
-                            throw new HL7Exception("Invalid segment found: " + strSegment, HL7Exception.BAD_MESSAGE);
-                        }
+                        // I'm taking this check out completely because it prevents custom Z-segments from being accepted
+                        // if (strSegment.Length > 3 && fourthCharMSH != strSegment[3])
+                        // {
+                        //     throw new HL7Exception("Invalid segment found: " + strSegment, HL7Exception.BAD_MESSAGE);
+                        // }
                     }
 
                     string _fieldDelimiters_Message = this.allSegments[0].Substring(3, 8 - 3);
@@ -790,31 +818,41 @@ namespace HL7.Dotnetcore
                             }
                         }
                         else
-                            throw new HL7Exception("MSH.10 not available", HL7Exception.UNSUPPORTED_MESSAGE_TYPE);
+                            throw new HL7Exception("MSH.9 not present", HL7Exception.UNSUPPORTED_MESSAGE_TYPE);
                     }
                     catch (System.IndexOutOfRangeException e)
                     {
                         throw new HL7Exception("Can't find message structure (MSH.9.3) - " + e.Message, HL7Exception.UNSUPPORTED_MESSAGE_TYPE);
                     }
 
+                    // MSH-10 (Message Control ID) is strictly a required field. 
                     try
                     {
                         this.MessageControlID = MSHFields[9];
-
                         if (string.IsNullOrEmpty(this.MessageControlID))
-                            throw new HL7Exception("MSH.10 - Message Control ID not found", HL7Exception.REQUIRED_FIELD_MISSING);
+                        {
+                            if (strict)
+                            {
+                                throw new HL7Exception("MSH.10 - Message Control ID not found", HL7Exception.REQUIRED_FIELD_MISSING);
+                            }
+                        }
                     }
                     catch (Exception ex)
                     {
                         throw new HL7Exception("Error occured while accessing MSH.10 - " + ex.Message, HL7Exception.REQUIRED_FIELD_MISSING);
                     }
 
+                    // MSH-11 (Processing ID) is strictly a required field
                     try
                     {
                         this.ProcessingID = MSHFields[10];
-
                         if (string.IsNullOrEmpty(this.ProcessingID))
-                            throw new HL7Exception("MSH.11 - Processing ID not found", HL7Exception.REQUIRED_FIELD_MISSING);
+                        {
+                            if (strict)
+                            {
+                                throw new HL7Exception("MSH.11 - Processing ID not found", HL7Exception.REQUIRED_FIELD_MISSING);
+                            }
+                        }
                     }
                     catch (Exception ex)
                     {

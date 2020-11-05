@@ -5,3 +5,6 @@ project.lock.json
 .DS_Store
 /packages
 /node_modules
+
+.vs/
+
