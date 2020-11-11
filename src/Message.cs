@@ -19,11 +19,10 @@ namespace HL7.Dotnetcore
         public short SegmentCount { get; set; }
         public HL7Encoding Encoding { get; set; } = new HL7Encoding();
 
-        // segmentRegex modified to accept custom Z-segments (e.g. ZZATTR) 
+        // RMS: segmentRegex modified to accept custom Z-segments (e.g. ZZATTR) 
         // Original regex was: "^[A-Z][A-Z][A-Z1-9]$";
-        // i don't know why the author anchored the start and end of the group.
+        //
         // Create a single capture group for the segment name.
-        //private val segRegex = """^([A-Z]{2}[A-Z,1-9]+)\|""".toRegex()
         private const string segmentRegex = "^[A-Z][A-Z][A-Z1-9]+$";
 
         private const string fieldRegex = @"^([0-9]+)([\(\[]([0-9]+)[\)\]]){0,1}$";
